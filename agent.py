@@ -1,18 +1,20 @@
 """Math agent that solves questions using tools in a ReAct loop."""
 
 import json
+import time
+import os
 
 from dotenv import load_dotenv
 from pydantic_ai import Agent
 from calculator import calculate
 
-load_dotenv()
+load_dotenv(override=True)
 
 # Configure your model below. Examples:
-#   "google-gla:gemini-2.5-flash"       (needs GOOGLE_API_KEY)
-#   "openai:gpt-4o-mini"                (needs OPENAI_API_KEY)
-#   "anthropic:claude-sonnet-4-6"    (needs ANTHROPIC_API_KEY)
-MODEL = "google-gla:gemini-2.5-flash"
+# ...
+MODEL = "google-gla:gemini-2.5-flash-lite"
+print("API key ends with:", os.getenv("GOOGLE_API_KEY", "")[-4:])
+print("MODEL:", MODEL)
 
 agent = Agent(
     MODEL,
@@ -41,12 +43,19 @@ def calculator_tool(expression: str) -> str:
 #   3. If not found, return the list of available product names so the agent
 #      can try again with the correct name
 #
-# @agent.tool_plain
-# def product_lookup(product_name: str) -> str:
-#     """Look up the price of a product by name.
-#     Use this when a question asks about product prices from the catalog.
-#     """
-#     ...
+@agent.tool_plain
+def product_lookup(product_name: str) -> str:
+    """Look up the price of a product by name.
+    Use this when a question asks about product prices from the catalog.
+    """
+    with open("products.json", "r", encoding="utf-8") as f:
+        catalog = json.load(f)
+
+    if product_name in catalog:
+        return str(catalog[product_name])
+
+    available = ", ".join(catalog.keys())
+    return f"Product not found. Available products: {available}"
 
 
 def load_questions(path: str = "math_questions.md") -> list[str]:
@@ -77,12 +86,20 @@ def main():
                 elif kind == "text":
                     print(f"- **Reason:** {part.content}")
                 elif kind == "tool-call":
-                    print(f"- **Act:** `{part.tool_name}({part.args})`")
+                    print(f"- **Act:** {part.tool_name}({part.args})")
                 elif kind == "tool-return":
-                    print(f"- **Result:** `{part.content}`")
+                    print(f"- **Result:** {part.content}")
 
         print(f"\n**Answer:** {result.output}\n")
         print("---\n")
+
+        if i < len(questions):
+            print("Waiting 13 seconds to avoid rate limits...\n")
+            time.sleep(13)
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":
